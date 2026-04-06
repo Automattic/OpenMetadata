@@ -91,6 +91,7 @@ class ElasticSearchBulkSinkSimpleTest {
 
   @Test
   void testAddEntitiesToVectorIndexBatch() {
-    elasticSearchBulkSink.addEntitiesToVectorIndexBatch(null, Collections.emptyList(), true);
+    elasticSearchBulkSink.addEntitiesToVectorIndexBatch(
+        null, Collections.emptyList(), true, null, null);
   }
 }

@@ -16,7 +16,7 @@ public class VectorSearchQueryBuilder {
   private static final String NONE = "__NONE__";
 
   public static String build(float[] vector, int size, int k, Map<String, List<String>> filters) {
-
+    
     StringBuilder sb =
         new StringBuilder(512)
             .append("{\"size\":")
@@ -30,10 +30,42 @@ public class VectorSearchQueryBuilder {
 
     // Build filter inside knn for efficient k-NN filtering
     sb.append(",\"filter\":{\"bool\":{\"must\":[");
+    appendFilterMustClauses(sb, filters);
+    sb.append("]}}"); // close must array and bool
 
+    sb.append("}}}}"); // close embedding, knn, query
+    return sb.toString();
+  }
+
+  public static String buildNativeESQuery(
+      float[] vector, int size, int k, Map<String, List<String>> filters) {
+    int numCandidates = Math.max(k, 100);
+    StringBuilder sb =
+        new StringBuilder(512)
+            .append("{\"size\":")
+            .append(size)
+            .append(",\"_source\":{\"excludes\":[\"embedding\"]}")
+            .append(",\"knn\":{")
+            .append("\"field\":\"embedding\"")
+            .append(",\"query_vector\":")
+            .append(Arrays.toString(vector))
+            .append(",\"k\":")
+            .append(k)
+            .append(",\"num_candidates\":")
+            .append(numCandidates);
+
+    sb.append(",\"filter\":{\"bool\":{\"must\":[");
+    appendFilterMustClauses(sb, filters);
+    sb.append("]}}"); // close must array and bool
+
+    sb.append("}}"); // close knn object
+    return sb.toString();
+  }
+
+  private static void appendFilterMustClauses(StringBuilder sb, Map<String, List<String>> filters) {
     // Only include documents where deleted=false
     sb.append("{\"term\":{\"deleted\":false}}");
-
+    
     // Then add user-specified filters
     for (var e : filters.entrySet()) {
       String field = e.getKey();
@@ -78,11 +110,6 @@ public class VectorSearchQueryBuilder {
         }
       }
     }
-
-    sb.append("]}}"); // close must array and bool
-
-    sb.append("}}}}"); // close embedding, knn, query
-    return sb.toString();
   }
 
   private static void appendNested(StringBuilder sb, String path, String field, List<String> vals) {
