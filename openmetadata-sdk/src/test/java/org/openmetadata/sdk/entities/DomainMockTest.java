@@ -196,7 +196,7 @@ public class DomainMockTest {
 
     if (result.getChildren() != null) {
       assertEquals(2, result.getChildren().size(), "Should have 2 child domains");
-      org.openmetadata.schema.type.EntityReference child1 = result.getChildren().getFirst();
+      org.openmetadata.schema.type.EntityReference child1 = result.getChildren().get(0);
       assertEquals("Backend", child1.getName(), "First child name should match");
       assertTrue(
           child1.getFullyQualifiedName().startsWith(parentName + "."),
