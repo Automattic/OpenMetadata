@@ -21,7 +21,7 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.openmetadata.service.Entity;
 import org.openmetadata.service.resources.Collection;
-import org.openmetadata.service.search.vector.OpenSearchVectorService;
+import org.openmetadata.service.search.vector.VectorIndexService;
 import org.openmetadata.service.search.vector.utils.DTOs.FingerprintResponse;
 import org.openmetadata.service.search.vector.utils.DTOs.VectorSearchRequest;
 import org.openmetadata.service.search.vector.utils.DTOs.VectorSearchResponse;
@@ -75,7 +75,7 @@ public class VectorSearchResource {
           .build();
     }
 
-    OpenSearchVectorService vectorService = OpenSearchVectorService.getInstance();
+    VectorIndexService vectorService = Entity.getSearchRepository().getVectorIndexService();
     if (vectorService == null) {
       return Response.status(Response.Status.SERVICE_UNAVAILABLE)
           .entity("{\"error\":\"Vector search service is not initialized\"}")
@@ -119,7 +119,7 @@ public class VectorSearchResource {
           .build();
     }
 
-    OpenSearchVectorService vectorService = OpenSearchVectorService.getInstance();
+    VectorIndexService vectorService = Entity.getSearchRepository().getVectorIndexService();
     if (vectorService == null) {
       return Response.status(Response.Status.SERVICE_UNAVAILABLE)
           .entity("{\"error\":\"Vector search service is not initialized\"}")

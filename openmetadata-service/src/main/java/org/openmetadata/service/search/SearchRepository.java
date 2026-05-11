@@ -323,7 +323,16 @@ public class SearchRepository {
   public void createMissingIndexes() {
     LOG.info("Checking for missing search indexes...");
     int created = 0;
+    boolean isEs = getSearchType() == ElasticSearchConfiguration.SearchType.ELASTICSEARCH;
     for (Map.Entry<String, IndexMapping> entry : entityIndexMap.entrySet()) {
+      // On Elasticsearch, defer vectorEmbedding index creation to ElasticSearchVectorService:
+      // it knows the active embedding model dimension and creates dense_vector with the
+      // correct dims. Creating it here would bake the placeholder dimension into the index
+      // (embeddingClient is not initialized yet at this boot phase) and dense_vector.dims
+      // is immutable on an existing ES index.
+      if (isEs && VectorIndexService.VECTOR_INDEX_KEY.equals(entry.getKey())) {
+        continue;
+      }
       try {
         if (!indexExists(entry.getValue())) {
           createIndex(entry.getValue());
@@ -348,7 +357,14 @@ public class SearchRepository {
     LOG.info("Creating/updating index templates for all entities...");
     int success = 0;
     int failed = 0;
+    boolean isEs = getSearchType() == ElasticSearchConfiguration.SearchType.ELASTICSEARCH;
     for (Map.Entry<String, IndexMapping> entry : entityIndexMap.entrySet()) {
+      // See createMissingIndexes: the vectorEmbedding index template would bake the
+      // placeholder dimension on Elasticsearch. ElasticSearchVectorService creates the
+      // actual index later with the correct dense_vector dims.
+      if (isEs && VectorIndexService.VECTOR_INDEX_KEY.equals(entry.getKey())) {
+        continue;
+      }
       try {
         IndexMapping indexMapping = entry.getValue();
         String indexName = indexMapping.getIndexName(clusterAlias);
@@ -526,10 +542,14 @@ public class SearchRepository {
   }
 
   private String getIndexMapping(IndexMapping indexMapping) {
+    String mappingFile = indexMapping.getIndexMappingFile();
+    if (getSearchType() == ElasticSearchConfiguration.SearchType.ELASTICSEARCH
+        && mappingFile != null
+        && mappingFile.endsWith("/vector_search_index.json")) {
+      mappingFile = mappingFile.replace("vector_search_index.json", "vector_search_index_es_native.json");
+    }
     try (InputStream in =
-        getClass()
-            .getResourceAsStream(
-                String.format(indexMapping.getIndexMappingFile(), language.toLowerCase()))) {
+        getClass().getResourceAsStream(String.format(mappingFile, language.toLowerCase()))) {
       assert in != null;
       return new String(in.readAllBytes());
     } catch (Exception e) {
@@ -2277,6 +2297,8 @@ public class SearchRepository {
   }
 
   private String reformatVectorIndexWithDimension(String mapping, int dimension) {
+    boolean isEs = getSearchType() == ElasticSearchConfiguration.SearchType.ELASTICSEARCH;
+    String dimensionField = isEs ? "dims" : "dimension";
     try {
       com.fasterxml.jackson.databind.ObjectMapper mapper =
           new com.fasterxml.jackson.databind.ObjectMapper();
@@ -2287,7 +2309,7 @@ public class SearchRepository {
           JsonNode properties = mappings.get("properties");
           if (properties.has("embedding")) {
             ((com.fasterxml.jackson.databind.node.ObjectNode) properties.get("embedding"))
-                .put("dimension", dimension);
+                .put(dimensionField, dimension);
           }
         }
         JsonNode meta =
@@ -2303,10 +2325,10 @@ public class SearchRepository {
       LOG.warn(
           "Failed to parse mapping JSON for dimension patching, falling back to string replace");
       return mapping
-          .replace("\"dimension\": 768", "\"dimension\": " + dimension)
-          .replace("\"dimension\":768", "\"dimension\":" + dimension)
-          .replace("\"dimension\": 512", "\"dimension\": " + dimension)
-          .replace("\"dimension\":512", "\"dimension\":" + dimension);
+          .replace("\"" + dimensionField + "\": 768", "\"" + dimensionField + "\": " + dimension)
+          .replace("\"" + dimensionField + "\":768", "\"" + dimensionField + "\":" + dimension)
+          .replace("\"" + dimensionField + "\": 512", "\"" + dimensionField + "\": " + dimension)
+          .replace("\"" + dimensionField + "\":512", "\"" + dimensionField + "\":" + dimension);
     }
   }
 
