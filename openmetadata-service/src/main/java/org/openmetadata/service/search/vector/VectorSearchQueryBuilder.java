@@ -15,6 +15,52 @@ public class VectorSearchQueryBuilder {
   private static final String ANY = "__ANY__";
   private static final String NONE = "__NONE__";
 
+  public static final int DEFAULT_KNN_NUM_CANDIDATES_MULTIPLIER = 2;
+
+  /**
+   * Build an Elasticsearch 8.x/9.x native KNN query (top-level {@code knn} block with
+   * {@code field}, {@code query_vector}, {@code k}, {@code num_candidates}, and an optional
+   * filter). Use this against indexes that store the embedding field as {@code dense_vector}.
+   */
+  public static String buildNativeESQuery(
+      float[] vector, int size, int k, Map<String, List<String>> filters) {
+    return buildNativeESQuery(vector, size, k, filters, DEFAULT_KNN_NUM_CANDIDATES_MULTIPLIER);
+  }
+
+  public static String buildNativeESQuery(
+      float[] vector,
+      int size,
+      int k,
+      Map<String, List<String>> filters,
+      int numCandidatesMultiplier) {
+    // Compute in long to avoid int overflow when k * multiplier exceeds Integer.MAX_VALUE;
+    // clamp to Integer.MAX_VALUE so num_candidates is always positive.
+    long candidatesLong = (long) k * (long) numCandidatesMultiplier;
+    int numCandidates =
+        (int) Math.max(100, Math.min(candidatesLong, (long) Integer.MAX_VALUE));
+
+    StringBuilder sb =
+        new StringBuilder(512)
+            .append("{\"size\":")
+            .append(size)
+            .append(",\"_source\":{\"excludes\":[\"embedding\"]}")
+            .append(",\"knn\":{")
+            .append("\"field\":\"embedding\"")
+            .append(",\"query_vector\":")
+            .append(Arrays.toString(vector))
+            .append(",\"k\":")
+            .append(k)
+            .append(",\"num_candidates\":")
+            .append(numCandidates);
+
+    sb.append(",\"filter\":{\"bool\":{\"must\":[");
+    appendMustClauses(sb, filters);
+    sb.append("]}}"); // close must array and bool
+
+    sb.append("}}"); // close knn object
+    return sb.toString();
+  }
+
   public static String build(float[] vector, int size, int k, Map<String, List<String>> filters) {
 
     StringBuilder sb =
@@ -31,6 +77,15 @@ public class VectorSearchQueryBuilder {
     // Build filter inside knn for efficient k-NN filtering
     sb.append(",\"filter\":{\"bool\":{\"must\":[");
 
+    appendMustClauses(sb, filters);
+
+    sb.append("]}}"); // close must array and bool
+
+    sb.append("}}}}"); // close embedding, knn, query
+    return sb.toString();
+  }
+
+  private static void appendMustClauses(StringBuilder sb, Map<String, List<String>> filters) {
     // Only include documents where deleted=false
     sb.append("{\"term\":{\"deleted\":false}}");
 
@@ -78,11 +133,6 @@ public class VectorSearchQueryBuilder {
         }
       }
     }
-
-    sb.append("]}}"); // close must array and bool
-
-    sb.append("}}}}"); // close embedding, knn, query
-    return sb.toString();
   }
 
   private static void appendNested(StringBuilder sb, String path, String field, List<String> vals) {

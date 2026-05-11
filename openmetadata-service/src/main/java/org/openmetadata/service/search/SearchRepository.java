@@ -137,6 +137,7 @@ import org.openmetadata.service.search.indexes.SearchIndex;
 import org.openmetadata.service.search.nlq.NLQService;
 import org.openmetadata.service.search.nlq.NLQServiceFactory;
 import org.openmetadata.service.search.opensearch.OpenSearchClient;
+import org.openmetadata.service.search.vector.ElasticSearchVectorService;
 import org.openmetadata.service.search.vector.OpenSearchVectorService;
 import org.openmetadata.service.search.vector.VectorEmbeddingHandler;
 import org.openmetadata.service.search.vector.VectorIndexService;
@@ -413,9 +414,10 @@ public class SearchRepository {
         OpenSearchVectorService.init(osClient, embeddingClient, language);
         this.vectorIndexService = OpenSearchVectorService.getInstance();
       } else {
-        LOG.warn(
-            "Vector embedding is only supported with OpenSearch. Elasticsearch support is planned.");
-        return;
+        es.co.elastic.clients.elasticsearch.ElasticsearchClient esClient =
+            ((ElasticSearchClient) getSearchClient()).getNewClient();
+        ElasticSearchVectorService.init(esClient, embeddingClient, language);
+        this.vectorIndexService = ElasticSearchVectorService.getInstance();
       }
 
       this.vectorEmbeddingHandler = new VectorEmbeddingHandler(vectorIndexService);
