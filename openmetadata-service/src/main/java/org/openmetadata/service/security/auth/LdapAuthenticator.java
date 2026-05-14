@@ -162,15 +162,16 @@ public class LdapAuthenticator implements AuthenticatorHandler {
 
     // Check if the user exists in OM Database
     try {
-      // Load all updater-tracked fields (teams, personas, profile, defaultPersona, domains,
-      // personaPreferences, authenticationMechanism, isEmailVerified) so the subsequent PUT
-      // in UserUtil.addOrUpdateUser doesn't clobber them. UserUpdater.entitySpecificUpdate
-      // runs updateTeams / updatePersonas / etc. unconditionally; with a sparse fetch those
-      // fields arrive null and the updater wipes the corresponding relationships, which
-      // destroys the user's manually-assigned teams on every LDAP login and makes login slow
-      // (deleteTo does work proportional to the user's existing team count).
-      User omUser =
-          userRepository.getByEmail(null, email, userRepository.getFieldsWithUserAuth("*"));
+      // Load the same field set the PUT path uses (USER_UPDATE_FIELDS): roles, teams,
+      // profile, authenticationMechanism, isEmailVerified, personas, defaultPersona,
+      // domains, personaPreferences. UserUpdater.entitySpecificUpdate runs updateTeams /
+      // updatePersonas / etc. unconditionally; with a sparse fetch those fields arrive
+      // null and the updater wipes the corresponding relationships, which destroys the
+      // user's manually-assigned teams on every LDAP login and makes login slow (deleteTo
+      // does work proportional to the user's existing team count). Use getPutFields()
+      // (narrow) rather than getFieldsWithUserAuth("*") (wide) so we don't eagerly load
+      // the heavy owns/follows relationship sets on every login.
+      User omUser = userRepository.getByEmail(null, email, userRepository.getPutFields());
       getRoleForLdap(userDn, omUser, Boolean.TRUE);
       finalUser = omUser;
     } catch (EntityNotFoundException ex) {
