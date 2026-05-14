@@ -441,6 +441,122 @@ class LdapAuthCompleteFlowTest extends OpenMetadataApplicationTest {
   }
 
   @Test
+  @Order(10)
+  void testLoginPreservesManuallyAssignedTeams() throws Exception {
+    // Regression for the bug where LDAP login wiped the user's existing team membership.
+    // The teams created/assigned here are manual OpenMetadata teams — they have no
+    // counterpart in the LDAP directory and are not part of any role/group mapping. They
+    // model the real-world setup: an admin curates teams in OM by hand and assigns users
+    // to them; the LDAP integration must not touch those assignments on login.
+    LOG.info("Testing that LDAP login preserves manually-assigned (non-LDAP) OM teams");
+
+    // Make sure the user has been created in OM by an earlier login.
+    LoginRequest initialLogin = new LoginRequest();
+    initialLogin.setEmail(TEST_USER_EMAIL);
+    initialLogin.setPassword(Base64.getEncoder().encodeToString(TEST_USER_PASSWORD.getBytes()));
+    Response initial =
+        client
+            .target(getServerUrl() + AUTH_LOGIN_ENDPOINT)
+            .request(MediaType.APPLICATION_JSON)
+            .post(Entity.json(initialLogin));
+    assertEquals(200, initial.getStatus(), "Initial login should succeed");
+
+    // Create three pure-OM teams directly via TeamRepository. These exist only inside
+    // OpenMetadata and have no LDAP group/DN/role-mapping backing them. Using the
+    // repository (not the HTTP API) avoids the TestUtils.ADMIN_AUTH_HEADERS path, which
+    // does not authenticate once the test class has switched the auth config to LDAP.
+    org.openmetadata.service.jdbi3.TeamRepository teamRepository =
+        (org.openmetadata.service.jdbi3.TeamRepository)
+            org.openmetadata.service.Entity.getEntityRepository(
+                org.openmetadata.service.Entity.TEAM);
+    String suffix = String.valueOf(System.currentTimeMillis());
+    org.openmetadata.schema.entity.teams.Team team1 =
+        teamRepository.create(
+            null,
+            new org.openmetadata.schema.entity.teams.Team()
+                .withId(java.util.UUID.randomUUID())
+                .withName("om-manual-team-1-" + suffix)
+                .withTeamType(org.openmetadata.schema.api.teams.CreateTeam.TeamType.GROUP)
+                .withUpdatedBy("admin")
+                .withUpdatedAt(System.currentTimeMillis()));
+    org.openmetadata.schema.entity.teams.Team team2 =
+        teamRepository.create(
+            null,
+            new org.openmetadata.schema.entity.teams.Team()
+                .withId(java.util.UUID.randomUUID())
+                .withName("om-manual-team-2-" + suffix)
+                .withTeamType(org.openmetadata.schema.api.teams.CreateTeam.TeamType.GROUP)
+                .withUpdatedBy("admin")
+                .withUpdatedAt(System.currentTimeMillis()));
+    org.openmetadata.schema.entity.teams.Team team3 =
+        teamRepository.create(
+            null,
+            new org.openmetadata.schema.entity.teams.Team()
+                .withId(java.util.UUID.randomUUID())
+                .withName("om-manual-team-3-" + suffix)
+                .withTeamType(org.openmetadata.schema.api.teams.CreateTeam.TeamType.GROUP)
+                .withUpdatedBy("admin")
+                .withUpdatedAt(System.currentTimeMillis()));
+
+    // Manually assign the three OM teams to the LDAP user (admin-curated membership).
+    UserRepository userRepository =
+        (UserRepository)
+            org.openmetadata.service.Entity.getEntityRepository(
+                org.openmetadata.service.Entity.USER);
+    User userBeforeAssign =
+        userRepository.getByEmail(
+            null, TEST_USER_EMAIL, userRepository.getFieldsWithUserAuth("*"));
+    userBeforeAssign.setTeams(
+        java.util.List.of(
+            team1.getEntityReference(), team2.getEntityReference(), team3.getEntityReference()));
+    userRepository.createOrUpdate(null, userBeforeAssign, "admin");
+
+    // Sanity-check the assignment landed.
+    User userAfterAssign =
+        userRepository.getByEmail(null, TEST_USER_EMAIL, userRepository.getFields("teams"));
+    List<String> assignedTeamNames =
+        userAfterAssign.getTeams().stream()
+            .map(org.openmetadata.schema.type.EntityReference::getName)
+            .sorted()
+            .toList();
+    assertTrue(
+        assignedTeamNames.containsAll(
+            java.util.List.of(team1.getName(), team2.getName(), team3.getName())),
+        "Setup failed: user should have all three manually-assigned teams before LDAP login."
+            + " Got: "
+            + assignedTeamNames);
+
+    // Trigger an LDAP login. This drives LdapAuthenticator.checkAndCreateUser through the
+    // PUT path that previously fetched only "id,name,email,roles" and let
+    // UserUpdater.updateTeams clobber the manual team assignments on every login.
+    LoginRequest relogin = new LoginRequest();
+    relogin.setEmail(TEST_USER_EMAIL);
+    relogin.setPassword(Base64.getEncoder().encodeToString(TEST_USER_PASSWORD.getBytes()));
+    Response reloginResponse =
+        client
+            .target(getServerUrl() + AUTH_LOGIN_ENDPOINT)
+            .request(MediaType.APPLICATION_JSON)
+            .post(Entity.json(relogin));
+    assertEquals(200, reloginResponse.getStatus(), "LDAP login should succeed");
+
+    // After the LDAP login the user MUST still belong to all three manually-assigned teams.
+    User userAfterLogin =
+        userRepository.getByEmail(null, TEST_USER_EMAIL, userRepository.getFields("teams"));
+    List<String> teamsAfterLogin =
+        userAfterLogin.getTeams().stream()
+            .map(org.openmetadata.schema.type.EntityReference::getName)
+            .sorted()
+            .toList();
+    assertTrue(
+        teamsAfterLogin.containsAll(
+            java.util.List.of(team1.getName(), team2.getName(), team3.getName())),
+        "LDAP login wiped the user's manual team assignments. Expected to still have "
+            + java.util.List.of(team1.getName(), team2.getName(), team3.getName())
+            + " but got "
+            + teamsAfterLogin);
+  }
+
+  @Test
   @Order(9)
   void testMultipleLoginAttempts() throws Exception {
     LOG.info("Testing multiple failed login attempts");

@@ -162,8 +162,15 @@ public class LdapAuthenticator implements AuthenticatorHandler {
 
     // Check if the user exists in OM Database
     try {
+      // Load all updater-tracked fields (teams, personas, profile, defaultPersona, domains,
+      // personaPreferences, authenticationMechanism, isEmailVerified) so the subsequent PUT
+      // in UserUtil.addOrUpdateUser doesn't clobber them. UserUpdater.entitySpecificUpdate
+      // runs updateTeams / updatePersonas / etc. unconditionally; with a sparse fetch those
+      // fields arrive null and the updater wipes the corresponding relationships, which
+      // destroys the user's manually-assigned teams on every LDAP login and makes login slow
+      // (deleteTo does work proportional to the user's existing team count).
       User omUser =
-          userRepository.getByEmail(null, email, userRepository.getFields("id,name,email,roles"));
+          userRepository.getByEmail(null, email, userRepository.getFieldsWithUserAuth("*"));
       getRoleForLdap(userDn, omUser, Boolean.TRUE);
       finalUser = omUser;
     } catch (EntityNotFoundException ex) {
