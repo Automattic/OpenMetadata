@@ -195,10 +195,11 @@ public class ElasticSearchGenericManager implements GenericClient {
 
       for (String indexName : getIndexResponse.indices().keySet()) {
         try {
-          client
-              .indices()
-              .putSettings(
-                  s -> s.index(indexName).settings(idx -> idx.lifecycle(l -> l.name(null))));
+          // Use the dedicated `POST /<index>/_ilm/remove` endpoint instead of
+          // `PUT _settings { index.lifecycle.name: null }`. The typed putSettings call
+          // drops null fields from the JSON body, which makes ES reject the request as
+          // "no settings to update" and leaves the ILM policy attached.
+          client.ilm().removePolicy(r -> r.index(indexName));
           LOG.info("Detached ILM policy from index: {}", indexName);
         } catch (ElasticsearchException e) {
           if (e.status() == 404) {
