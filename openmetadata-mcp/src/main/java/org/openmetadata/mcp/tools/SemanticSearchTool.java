@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.openmetadata.schema.utils.JsonUtils;
 import org.openmetadata.service.Entity;
 import org.openmetadata.service.limits.Limits;
-import org.openmetadata.service.search.vector.OpenSearchVectorService;
+import org.openmetadata.service.search.vector.VectorIndexService;
 import org.openmetadata.service.search.vector.utils.DTOs.VectorSearchResponse;
 import org.openmetadata.service.security.Authorizer;
 import org.openmetadata.service.security.auth.CatalogSecurityContext;
@@ -42,7 +42,12 @@ public class SemanticSearchTool implements McpTool {
           "Semantic search is not enabled. Configure vector embeddings in the OpenMetadata server settings.");
     }
 
-    OpenSearchVectorService vectorService = OpenSearchVectorService.getInstance();
+    // Resolve via the SearchRepository abstraction so this tool works on both backends.
+    // Direct OpenSearchVectorService.getInstance() returned null when the active vector
+    // service was ElasticSearchVectorService (ES backend), causing every MCP
+    // semantic_search call to fail with "Vector search service is not initialized" even
+    // though the REST endpoint /api/v1/search/vector/query worked.
+    VectorIndexService vectorService = Entity.getSearchRepository().getVectorIndexService();
     if (vectorService == null) {
       return errorResponse("Vector search service is not initialized");
     }
