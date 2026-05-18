@@ -370,16 +370,28 @@ class SupersetSourceMixin(DashboardServiceSource):
                             column_lineage=column_lineage,
                         )
 
-                    # DataModel -> Chart edge: makes the chart appear in the
-                    # lineage graph between the datamodel and the dashboard.
+                    # DataModel -> Chart -> Dashboard bridge: emit BOTH edges
+                    # so the dashboard's lineage graph renders the chart
+                    # between the datamodel and the dashboard, instead of
+                    # the datamodel hanging off the dashboard directly.
                     chart_entity = self._get_chart_entity(chart_json, dashboard_id)
                     if chart_entity is not None:
-                        lineage = self._get_add_lineage_request(
+                        dm_to_chart = self._get_add_lineage_request(
                             to_entity=chart_entity,
                             from_entity=to_entity,
                         )
-                        if lineage is not None:
-                            yield lineage
+                        if dm_to_chart is not None:
+                            yield dm_to_chart
+                        dashboard_entity = self._get_dashboard_entity(
+                            dashboard_details
+                        )
+                        if dashboard_entity is not None:
+                            chart_to_dash = self._get_add_lineage_request(
+                                to_entity=dashboard_entity,
+                                from_entity=chart_entity,
+                            )
+                            if chart_to_dash is not None:
+                                yield chart_to_dash
             except Exception as exc:
                 yield Either(
                     left=StackTraceError(
@@ -391,6 +403,31 @@ class SupersetSourceMixin(DashboardServiceSource):
                         stackTrace=traceback.format_exc(),
                     )
                 )
+
+    def _get_dashboard_entity(self, dashboard_details) -> Optional[Dashboard]:
+        """
+        Look up the Dashboard entity created earlier so we can emit a
+        Chart -> Dashboard lineage edge.
+        """
+        dashboard_id = getattr(dashboard_details, "id", None)
+        if dashboard_id is None:
+            return None
+        try:
+            dashboard_fqn = fqn.build(
+                self.metadata,
+                entity_type=Dashboard,
+                service_name=self.context.get().dashboard_service,
+                dashboard_name=str(dashboard_id),
+            )
+            return self.metadata.get_by_name(entity=Dashboard, fqn=dashboard_fqn)
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning(
+                "[superset-link] failed to resolve dashboard entity for "
+                "dashboard_id=%s: %s",
+                dashboard_id,
+                exc,
+            )
+            return None
 
     def _get_chart_entity(self, chart_json, dashboard_id) -> Optional[Chart]:
         """
