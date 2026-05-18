@@ -340,12 +340,14 @@ class SupersetSourceMixin(DashboardServiceSource):
         db_service_prefix: Optional[str] = None,
     ) -> Iterable[Either[AddLineageRequest]]:
         """
-        Get lineage between Table -> DataModel -> Chart for every chart on this
-        dashboard. The Dashboard -> Chart and Dashboard -> DataModel structural
-        links are set on CreateDashboardRequest in yield_dashboard, so the
-        complete chain the UI renders is Table -> DataModel -> Chart -> Dashboard.
+        Emit lineage edges Table -> DataModel -> Chart -> Dashboard for every
+        chart on this dashboard. Dashboard.charts (set in yield_dashboard)
+        is a structural ref only — the dashboard lineage graph traverses
+        through explicit lineage edges, so we also emit Chart -> Dashboard
+        here. The base class' direct DataModel -> Dashboard edge is
+        suppressed by the override of yield_datamodel_dashboard_lineage so
+        the chart node bridges the chain in the rendered graph.
         """
-        dashboard_id = getattr(dashboard_details, "id", None)
         for chart_json in filter(
             None,
             [
@@ -374,7 +376,7 @@ class SupersetSourceMixin(DashboardServiceSource):
                     # so the dashboard's lineage graph renders the chart
                     # between the datamodel and the dashboard, instead of
                     # the datamodel hanging off the dashboard directly.
-                    chart_entity = self._get_chart_entity(chart_json, dashboard_id)
+                    chart_entity = self._get_chart_entity(chart_json)
                     if chart_entity is not None:
                         dm_to_chart = self._get_add_lineage_request(
                             to_entity=chart_entity,
@@ -422,14 +424,13 @@ class SupersetSourceMixin(DashboardServiceSource):
             return self.metadata.get_by_name(entity=Dashboard, fqn=dashboard_fqn)
         except Exception as exc:  # pylint: disable=broad-except
             logger.warning(
-                "[superset-link] failed to resolve dashboard entity for "
-                "dashboard_id=%s: %s",
+                "Failed to resolve dashboard entity for dashboard_id=%s: %s",
                 dashboard_id,
                 exc,
             )
             return None
 
-    def _get_chart_entity(self, chart_json, dashboard_id) -> Optional[Chart]:
+    def _get_chart_entity(self, chart_json) -> Optional[Chart]:
         """
         Look up the Chart entity created earlier in this pipeline so we can
         emit a DataModel -> Chart lineage edge.
@@ -444,21 +445,11 @@ class SupersetSourceMixin(DashboardServiceSource):
                 service_name=self.context.get().dashboard_service,
                 chart_name=str(chart_id),
             )
-            chart_entity = self.metadata.get_by_name(entity=Chart, fqn=chart_fqn)
-            if chart_entity is None:
-                logger.info(
-                    "[superset-link] chart entity not yet available for "
-                    "fqn=%s (dashboard=%s) — DataModel->Chart edge skipped",
-                    chart_fqn,
-                    dashboard_id,
-                )
-            return chart_entity
+            return self.metadata.get_by_name(entity=Chart, fqn=chart_fqn)
         except Exception as exc:  # pylint: disable=broad-except
             logger.warning(
-                "[superset-link] failed to resolve chart entity for chart_id=%s "
-                "dashboard=%s: %s",
+                "Failed to resolve chart entity for chart_id=%s: %s",
                 chart_id,
-                dashboard_id,
                 exc,
             )
             return None

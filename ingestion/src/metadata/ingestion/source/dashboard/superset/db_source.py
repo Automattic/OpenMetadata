@@ -128,14 +128,6 @@ class SupersetDBSource(SupersetSourceMixin):
         """Method to Get Dashboard Entity"""
         try:
             ctx = self.context.get()
-            logger.info(
-                "[superset-link] yield_dashboard for id=%s title=%r "
-                "context.charts=%s context.dataModels=%s",
-                dashboard_details.id,
-                dashboard_details.dashboard_title,
-                ctx.charts,
-                ctx.dataModels,
-            )
             dashboard_request = CreateDashboardRequest(
                 name=EntityName(str(dashboard_details.id)),
                 displayName=dashboard_details.dashboard_title,
@@ -328,14 +320,6 @@ class SupersetDBSource(SupersetSourceMixin):
                         ),
                         columns=self.get_column_info(col_names),
                         dataModelType=DataModelType.SupersetDataModel.value,
-                    )
-                    logger.info(
-                        "[superset-link] yielding datamodel name=%s displayName=%s "
-                        "for dashboard=%s chart_id=%s",
-                        data_model_request.name.root,
-                        data_model_request.displayName,
-                        dashboard_details.id,
-                        chart_id,
                     )
                     yield Either(right=data_model_request)
                     self.register_record_datamodel(datamodel_request=data_model_request)
