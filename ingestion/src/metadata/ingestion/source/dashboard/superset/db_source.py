@@ -130,6 +130,30 @@ class SupersetDBSource(SupersetSourceMixin):
     ) -> Iterable[Either[CreateDashboardRequest]]:
         """Method to Get Dashboard Entity"""
         try:
+            ctx = self.context.get()
+            logger.info(
+                "[superset-link] yield_dashboard for id=%s title=%r "
+                "context.charts=%s context.dataModels=%s",
+                dashboard_details.id,
+                dashboard_details.dashboard_title,
+                ctx.charts,
+                ctx.dataModels,
+            )
+            data_model_fqns = [
+                fqn.build(
+                    self.metadata,
+                    entity_type=DashboardDataModel,
+                    service_name=ctx.dashboard_service,
+                    data_model_name=data_model,
+                )
+                for data_model in ctx.dataModels or []
+            ]
+            logger.info(
+                "[superset-link] resolved %d dataModel FQNs for dashboard=%s: %s",
+                len(data_model_fqns),
+                dashboard_details.id,
+                data_model_fqns,
+            )
             dashboard_request = CreateDashboardRequest(
                 name=EntityName(str(dashboard_details.id)),
                 displayName=dashboard_details.dashboard_title,
@@ -141,24 +165,14 @@ class SupersetDBSource(SupersetSourceMixin):
                         fqn.build(
                             self.metadata,
                             entity_type=Chart,
-                            service_name=self.context.get().dashboard_service,
+                            service_name=ctx.dashboard_service,
                             chart_name=chart,
                         )
                     )
-                    for chart in self.context.get().charts or []
+                    for chart in ctx.charts or []
                 ],
-                dataModels=[
-                    FullyQualifiedEntityName(
-                        fqn.build(
-                            self.metadata,
-                            entity_type=DashboardDataModel,
-                            service_name=self.context.get().dashboard_service,
-                            data_model_name=data_model,
-                        )
-                    )
-                    for data_model in self.context.get().dataModels or []
-                ],
-                service=FullyQualifiedEntityName(self.context.get().dashboard_service),
+                dataModels=[FullyQualifiedEntityName(d) for d in data_model_fqns],
+                service=FullyQualifiedEntityName(ctx.dashboard_service),
                 owners=self.get_owner_ref(dashboard_details=dashboard_details),
             )
             yield Either(right=dashboard_request)
@@ -323,6 +337,14 @@ class SupersetDBSource(SupersetSourceMixin):
                         ),
                         columns=self.get_column_info(col_names),
                         dataModelType=DataModelType.SupersetDataModel.value,
+                    )
+                    logger.info(
+                        "[superset-link] yielding datamodel name=%s displayName=%s "
+                        "for dashboard=%s chart_id=%s",
+                        data_model_request.name.root,
+                        data_model_request.displayName,
+                        dashboard_details.id,
+                        chart_id,
                     )
                     yield Either(right=data_model_request)
                     self.register_record_datamodel(datamodel_request=data_model_request)
