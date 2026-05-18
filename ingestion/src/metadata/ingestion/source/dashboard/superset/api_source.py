@@ -21,10 +21,7 @@ from metadata.generated.schema.api.data.createDashboardDataModel import (
     CreateDashboardDataModelRequest,
 )
 from metadata.generated.schema.entity.data.chart import Chart
-from metadata.generated.schema.entity.data.dashboardDataModel import (
-    DashboardDataModel,
-    DataModelType,
-)
+from metadata.generated.schema.entity.data.dashboardDataModel import DataModelType
 from metadata.generated.schema.entity.services.databaseService import DatabaseService
 from metadata.generated.schema.entity.services.ingestionPipelines.status import (
     StackTraceError,
@@ -120,17 +117,12 @@ class SupersetAPISource(SupersetSourceMixin):
                     )
                     for chart in self.context.get().charts or []
                 ],
-                dataModels=[
-                    FullyQualifiedEntityName(
-                        fqn.build(
-                            self.metadata,
-                            entity_type=DashboardDataModel,
-                            service_name=self.context.get().dashboard_service,
-                            data_model_name=data_model,
-                        )
-                    )
-                    for data_model in self.context.get().dataModels or []
-                ],
+                # Dashboard.dataModels intentionally not set. Charts are linked
+                # to the dashboard via Dashboard.charts above and to their
+                # datamodels via the DataModel->Chart lineage edge emitted in
+                # SupersetSourceMixin.yield_dashboard_lineage_details, so the
+                # rendered chain in the lineage graph is
+                # DataModel -> Chart -> Dashboard with the chart as the bridge.
                 service=FullyQualifiedEntityName(self.context.get().dashboard_service),
                 owners=self.get_owner_ref(dashboard_details=dashboard_details),
             )

@@ -24,10 +24,7 @@ from metadata.generated.schema.api.data.createDashboardDataModel import (
     CreateDashboardDataModelRequest,
 )
 from metadata.generated.schema.entity.data.chart import Chart
-from metadata.generated.schema.entity.data.dashboardDataModel import (
-    DashboardDataModel,
-    DataModelType,
-)
+from metadata.generated.schema.entity.data.dashboardDataModel import DataModelType
 from metadata.generated.schema.entity.services.connections.database.mysqlConnection import (
     MysqlConnection,
 )
@@ -139,24 +136,6 @@ class SupersetDBSource(SupersetSourceMixin):
                 ctx.charts,
                 ctx.dataModels,
             )
-            # Dedupe: same datamodel can back multiple charts on the dashboard
-            data_model_fqns = list(
-                dict.fromkeys(
-                    fqn.build(
-                        self.metadata,
-                        entity_type=DashboardDataModel,
-                        service_name=ctx.dashboard_service,
-                        data_model_name=data_model,
-                    )
-                    for data_model in ctx.dataModels or []
-                )
-            )
-            logger.info(
-                "[superset-link] resolved %d dataModel FQNs for dashboard=%s: %s",
-                len(data_model_fqns),
-                dashboard_details.id,
-                data_model_fqns,
-            )
             dashboard_request = CreateDashboardRequest(
                 name=EntityName(str(dashboard_details.id)),
                 displayName=dashboard_details.dashboard_title,
@@ -174,7 +153,12 @@ class SupersetDBSource(SupersetSourceMixin):
                     )
                     for chart in ctx.charts or []
                 ],
-                dataModels=[FullyQualifiedEntityName(d) for d in data_model_fqns],
+                # Dashboard.dataModels intentionally not set. Charts are linked
+                # to the dashboard via Dashboard.charts above and to their
+                # datamodels via the DataModel->Chart lineage edge emitted in
+                # SupersetSourceMixin.yield_dashboard_lineage_details, so the
+                # rendered chain in the lineage graph is
+                # DataModel -> Chart -> Dashboard with the chart as the bridge.
                 service=FullyQualifiedEntityName(ctx.dashboard_service),
                 owners=self.get_owner_ref(dashboard_details=dashboard_details),
             )
