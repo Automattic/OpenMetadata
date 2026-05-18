@@ -139,15 +139,18 @@ class SupersetDBSource(SupersetSourceMixin):
                 ctx.charts,
                 ctx.dataModels,
             )
-            data_model_fqns = [
-                fqn.build(
-                    self.metadata,
-                    entity_type=DashboardDataModel,
-                    service_name=ctx.dashboard_service,
-                    data_model_name=data_model,
+            # Dedupe: same datamodel can back multiple charts on the dashboard
+            data_model_fqns = list(
+                dict.fromkeys(
+                    fqn.build(
+                        self.metadata,
+                        entity_type=DashboardDataModel,
+                        service_name=ctx.dashboard_service,
+                        data_model_name=data_model,
+                    )
+                    for data_model in ctx.dataModels or []
                 )
-                for data_model in ctx.dataModels or []
-            ]
+            )
             logger.info(
                 "[superset-link] resolved %d dataModel FQNs for dashboard=%s: %s",
                 len(data_model_fqns),

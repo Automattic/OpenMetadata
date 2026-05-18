@@ -19,6 +19,8 @@ from collate_sqllineage.core.models import Column as LineageColumn
 from collate_sqllineage.core.models import Table as LineageTable
 
 from metadata.generated.schema.api.lineage.addLineage import AddLineageRequest
+from metadata.generated.schema.entity.data.chart import Chart
+from metadata.generated.schema.entity.data.dashboard import Dashboard
 from metadata.generated.schema.entity.data.dashboardDataModel import DashboardDataModel
 from metadata.generated.schema.entity.data.table import Column, DataType, Table
 from metadata.generated.schema.entity.services.connections.dashboard.supersetConnection import (
@@ -325,8 +327,12 @@ class SupersetSourceMixin(DashboardServiceSource):
         db_service_prefix: Optional[str] = None,
     ) -> Iterable[Either[AddLineageRequest]]:
         """
-        Get lineage between datamodel and table
+        Get lineage between Table -> DataModel -> Chart for every chart on this
+        dashboard. The Dashboard -> Chart and Dashboard -> DataModel structural
+        links are set on CreateDashboardRequest in yield_dashboard, so the
+        complete chain the UI renders is Table -> DataModel -> Chart -> Dashboard.
         """
+        dashboard_id = getattr(dashboard_details, "id", None)
         for chart_json in filter(
             None,
             [
@@ -350,6 +356,17 @@ class SupersetSourceMixin(DashboardServiceSource):
                             from_entity=from_entity_table,
                             column_lineage=column_lineage,
                         )
+
+                    # DataModel -> Chart edge: makes the chart appear in the
+                    # lineage graph between the datamodel and the dashboard.
+                    chart_entity = self._get_chart_entity(chart_json, dashboard_id)
+                    if chart_entity is not None:
+                        lineage = self._get_add_lineage_request(
+                            to_entity=chart_entity,
+                            from_entity=to_entity,
+                        )
+                        if lineage is not None:
+                            yield lineage
             except Exception as exc:
                 yield Either(
                     left=StackTraceError(
@@ -361,6 +378,40 @@ class SupersetSourceMixin(DashboardServiceSource):
                         stackTrace=traceback.format_exc(),
                     )
                 )
+
+    def _get_chart_entity(self, chart_json, dashboard_id) -> Optional[Chart]:
+        """
+        Look up the Chart entity created earlier in this pipeline so we can
+        emit a DataModel -> Chart lineage edge.
+        """
+        chart_id = getattr(chart_json, "id", None)
+        if chart_id is None:
+            return None
+        try:
+            chart_fqn = fqn.build(
+                self.metadata,
+                entity_type=Chart,
+                service_name=self.context.get().dashboard_service,
+                chart_name=str(chart_id),
+            )
+            chart_entity = self.metadata.get_by_name(entity=Chart, fqn=chart_fqn)
+            if chart_entity is None:
+                logger.info(
+                    "[superset-link] chart entity not yet available for "
+                    "fqn=%s (dashboard=%s) — DataModel->Chart edge skipped",
+                    chart_fqn,
+                    dashboard_id,
+                )
+            return chart_entity
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning(
+                "[superset-link] failed to resolve chart entity for chart_id=%s "
+                "dashboard=%s: %s",
+                chart_id,
+                dashboard_id,
+                exc,
+            )
+            return None
 
     def _get_datamodel(
         self, datamodel: Union[SupersetDatasource, FetchChart]
