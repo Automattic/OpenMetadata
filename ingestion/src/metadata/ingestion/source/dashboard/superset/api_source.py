@@ -21,7 +21,10 @@ from metadata.generated.schema.api.data.createDashboardDataModel import (
     CreateDashboardDataModelRequest,
 )
 from metadata.generated.schema.entity.data.chart import Chart
-from metadata.generated.schema.entity.data.dashboardDataModel import DataModelType
+from metadata.generated.schema.entity.data.dashboardDataModel import (
+    DashboardDataModel,
+    DataModelType,
+)
 from metadata.generated.schema.entity.services.databaseService import DatabaseService
 from metadata.generated.schema.entity.services.ingestionPipelines.status import (
     StackTraceError,
@@ -116,6 +119,17 @@ class SupersetAPISource(SupersetSourceMixin):
                         )
                     )
                     for chart in self.context.get().charts or []
+                ],
+                dataModels=[
+                    FullyQualifiedEntityName(
+                        fqn.build(
+                            self.metadata,
+                            entity_type=DashboardDataModel,
+                            service_name=self.context.get().dashboard_service,
+                            data_model_name=data_model,
+                        )
+                    )
+                    for data_model in self.context.get().dataModels or []
                 ],
                 service=FullyQualifiedEntityName(self.context.get().dashboard_service),
                 owners=self.get_owner_ref(dashboard_details=dashboard_details),
