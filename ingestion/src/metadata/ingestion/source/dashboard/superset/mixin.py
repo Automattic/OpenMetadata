@@ -321,6 +321,19 @@ class SupersetSourceMixin(DashboardServiceSource):
             fqn=datamodel_fqn,
         )
 
+    def yield_datamodel_dashboard_lineage(
+        self,
+    ) -> Iterable[Either[AddLineageRequest]]:
+        """
+        Skip the base class' direct DataModel -> Dashboard lineage edge.
+        For Superset we bridge the chain through the Chart node so the graph
+        renders DataModel -> Chart -> Dashboard rather than DataModel ->
+        Dashboard alongside the chart list. The DataModel -> Chart edge is
+        emitted in yield_dashboard_lineage_details.
+        """
+        return
+        yield  # pragma: no cover  # noqa: F841  # make this an iterator
+
     def yield_dashboard_lineage_details(
         self,
         dashboard_details: Union[FetchDashboard, DashboardResult],
