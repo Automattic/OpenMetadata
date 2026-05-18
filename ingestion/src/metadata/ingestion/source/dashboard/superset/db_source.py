@@ -153,12 +153,16 @@ class SupersetDBSource(SupersetSourceMixin):
                     )
                     for chart in ctx.charts or []
                 ],
-                # Dashboard.dataModels intentionally not set. Charts are linked
-                # to the dashboard via Dashboard.charts above and to their
-                # datamodels via the DataModel->Chart lineage edge emitted in
-                # SupersetSourceMixin.yield_dashboard_lineage_details, so the
-                # rendered chain in the lineage graph is
-                # DataModel -> Chart -> Dashboard with the chart as the bridge.
+                # Force-clear Dashboard.dataModels by sending an empty list.
+                # The relationship is represented via the DataModel->Chart
+                # lineage edge emitted in
+                # SupersetSourceMixin.yield_dashboard_lineage_details; charts
+                # are already linked to the dashboard via Dashboard.charts
+                # above, so the rendered chain in the lineage graph is
+                # DataModel -> Chart -> Dashboard with the chart as the
+                # bridge. Sending [] (instead of omitting the field) ensures
+                # we delete any datamodel entries left over from prior runs.
+                dataModels=[],
                 service=FullyQualifiedEntityName(ctx.dashboard_service),
                 owners=self.get_owner_ref(dashboard_details=dashboard_details),
             )
