@@ -463,6 +463,14 @@ class MetadataRestSink(Sink):  # pylint: disable=too-many-public-methods
     @_run_dispatch.register
     def write_lineage(self, add_lineage: AddLineageRequest) -> Either[Dict[str, Any]]:
         created_lineage = self.metadata.add_lineage(add_lineage, check_patch=True)
+        if created_lineage is None:
+            logger.warning(
+                "Lineage edge was written but the source entity lineage could not "
+                "be fetched back (commonly a dangling downstream reference to a "
+                f"deleted entity): {add_lineage.edge.fromEntity.type} "
+                f"{add_lineage.edge.fromEntity.id.root}"
+            )
+            return Either(right=None)
         if created_lineage.get("error"):
             return Either(
                 left=StackTraceError(
