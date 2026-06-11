@@ -608,6 +608,36 @@ def get_table_entities_from_query(
         if table_entities:
             return table_entities
 
+    # Cross-catalog fallback: the database resolved from the query/context may not
+    # match the database the table was ingested under -- e.g. a view in catalog
+    # `hiyu` (service trino_views_hiyu) referencing a table ingested as
+    # `trino_hiyu.iceberg.<schema>.<table>`. Retry with database=None so the FQN
+    # search wildcards the database (`<service>.*.<schema>.<table>`) and resolves
+    # the table across the configured cross-database services. Scoped to
+    # `service_names`, which already only contains the current service plus the
+    # explicitly-allowed crossDatabaseServiceNames, so this can't reach unrelated
+    # services.
+    table_entities = search_table_entities(
+        metadata=metadata,
+        service_names=service_names,
+        database=None,
+        database_schema=schema_query if schema_query else database_schema,
+        table=table,
+    )
+    if table_entities:
+        return table_entities
+
+    if schema_fallback:
+        table_entities = search_table_entities(
+            metadata=metadata,
+            service_names=service_names,
+            database=None,
+            database_schema=None,
+            table=table,
+        )
+        if table_entities:
+            return table_entities
+
     return None
 
 
