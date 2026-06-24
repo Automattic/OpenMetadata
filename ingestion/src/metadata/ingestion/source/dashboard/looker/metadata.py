@@ -1776,8 +1776,18 @@ class LookerSource(DashboardServiceSource):
                     source_url = chart.query.share_url
                 elif getattr(chart.result_maker, "query", None) is not None:
                     source_url = chart.result_maker.query.share_url
-                else:
+                elif chart.merge_result_id is not None:
                     source_url = f"{self._ui_base}/merge?mid={chart.merge_result_id}"
+                else:
+                    # No query, no result-maker query, and no merge result:
+                    # a data-less Looker tile (text/markdown/decoration). Skip
+                    # instead of emitting a dead {host}/merge?mid=None link.
+                    logger.info(
+                        f"Skipping data-less Looker tile id={chart.id} "
+                        f"title={chart.title!r} type={chart.type}: no query, "
+                        "no result-maker query, no merge result"
+                    )
+                    continue
                 yield Either(
                     right=CreateChartRequest(
                         name=EntityName(chart.id),
