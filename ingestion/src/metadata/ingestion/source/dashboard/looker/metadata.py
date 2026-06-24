@@ -219,6 +219,22 @@ class LookerSource(DashboardServiceSource):
 
         self._added_lineage: Optional[Dict] = {}
 
+    @property
+    def _ui_base(self) -> str:
+        """
+        Base URL for human-facing "View in Looker" links.
+
+        `hostPort` is bound to the Looker API host (the SDK uses it as
+        LOOKERSDK_BASE_URL), which is not always the URL a user should open in
+        the browser. When the API host differs from the UI host, set the
+        LOOKER_UI_BASE env var to the UI base URL; otherwise we fall back to
+        hostPort so behavior is unchanged.
+        """
+        return clean_uri(
+            os.environ.get("LOOKER_UI_BASE")
+            or str(self.service_connection.hostPort)
+        )
+
     @classmethod
     def create(
         cls,
@@ -1368,7 +1384,7 @@ class LookerSource(DashboardServiceSource):
             # like LookML assets, but rather just organised in folders.
             project=self.get_project_name(dashboard_details),
             sourceUrl=SourceUrl(
-                f"{clean_uri(self.service_connection.hostPort)}/dashboards/{dashboard_details.id}"
+                f"{self._ui_base}/dashboards/{dashboard_details.id}"
             ),
             service=self.context.get().dashboard_service,
             owners=self.get_owner_ref(dashboard_details=dashboard_details),
@@ -1761,7 +1777,7 @@ class LookerSource(DashboardServiceSource):
                 elif getattr(chart.result_maker, "query", None) is not None:
                     source_url = chart.result_maker.query.share_url
                 else:
-                    source_url = f"{clean_uri(self.service_connection.hostPort)}/merge?mid={chart.merge_result_id}"
+                    source_url = f"{self._ui_base}/merge?mid={chart.merge_result_id}"
                 yield Either(
                     right=CreateChartRequest(
                         name=EntityName(chart.id),
