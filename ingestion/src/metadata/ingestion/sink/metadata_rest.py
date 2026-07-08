@@ -453,7 +453,9 @@ class MetadataRestSink(Sink):  # pylint: disable=too-many-public-methods
 
         return self._record_query_flush_result(result)
 
-    def _record_query_flush_result(self, result: Optional[BulkOperationResult]) -> Either[Entity]:  # noqa: UP045
+    def _record_query_flush_result(
+        self, result: Optional[BulkOperationResult]
+    ) -> Either[Entity]:  # noqa: UP045
         """Record a query bulk response. Already-present queries are reported as warnings
         (not failures) so a lineage run is not marked failed over queries that lost no
         metadata. Any other failure is still recorded as a failure."""
@@ -468,7 +470,10 @@ class MetadataRestSink(Sink):  # pylint: disable=too-many-public-methods
         for failed in result.failedRequest or []:
             query_ref = failed.request or "unknown"
             if is_duplicate_query_conflict(failed.message):
-                self.status.warning("Query", f"Skipped already-present query [{query_ref}]: {failed.message}")
+                self.status.warning(
+                    "Query",
+                    f"Skipped already-present query [{query_ref}]: {failed.message}",
+                )
             else:
                 failure = StackTraceError(
                     name="Query Buffer",
@@ -478,7 +483,9 @@ class MetadataRestSink(Sink):  # pylint: disable=too-many-public-methods
                 self.status.failed(failure)
                 first_failure = first_failure or failure
 
-        return Either(left=first_failure) if first_failure else Either(right=result)  # pyright: ignore[reportCallIssue]
+        return (
+            Either(left=first_failure) if first_failure else Either(right=result)
+        )  # pyright: ignore[reportCallIssue]
 
     @_run_dispatch.register
     def patch_entity(self, record: PatchRequest) -> Either[Entity]:
@@ -566,14 +573,20 @@ class MetadataRestSink(Sink):  # pylint: disable=too-many-public-methods
     @_run_dispatch.register
     def write_lineage(self, add_lineage: AddLineageRequest) -> Either[Dict[str, Any]]:
         created_lineage = self.metadata.add_lineage(add_lineage, check_patch=True)
-        if created_lineage.get("error"):
+        if created_lineage and created_lineage.get("error"):
             return Either(
                 left=StackTraceError(
                     name="AddLineageRequestError", error=created_lineage["error"]
                 )
             )
 
-        return Either(right=created_lineage["entity"]["fullyQualifiedName"])
+        # The edge was written, but reading back the origin node's lineage can
+        # fail (e.g. 404 when its graph holds an edge to a deleted entity).
+        # Fall back to the request's from-entity so this is not a false error.
+        entity_fqn = (created_lineage or {}).get("entity", {}).get(
+            "fullyQualifiedName"
+        ) or model_str(add_lineage.edge.fromEntity.id)
+        return Either(right=entity_fqn)
 
     @_run_dispatch.register
     def write_override_lineage(
