@@ -109,6 +109,7 @@ from metadata.ingestion.models.tests_data import (
 from metadata.ingestion.models.user import OMetaUserProfile
 from metadata.ingestion.ometa.client import APIError, LimitsException
 from metadata.ingestion.ometa.ometa_api import OpenMetadata
+from metadata.ingestion.ometa.utils import model_str
 from metadata.ingestion.source.dashboard.dashboard_service import DashboardUsage
 from metadata.ingestion.source.database.database_service import DataModelLink
 from metadata.ingestion.source.pipeline.pipeline_service import (
@@ -466,14 +467,20 @@ class MetadataRestSink(Sink):  # pylint: disable=too-many-public-methods
     @_run_dispatch.register
     def write_lineage(self, add_lineage: AddLineageRequest) -> Either[Dict[str, Any]]:
         created_lineage = self.metadata.add_lineage(add_lineage, check_patch=True)
-        if created_lineage.get("error"):
+        if created_lineage and created_lineage.get("error"):
             return Either(
                 left=StackTraceError(
                     name="AddLineageRequestError", error=created_lineage["error"]
                 )
             )
 
-        return Either(right=created_lineage["entity"]["fullyQualifiedName"])
+        # The edge was written, but reading back the origin node's lineage can
+        # fail (e.g. 404 when its graph holds an edge to a deleted entity).
+        # Fall back to the request's from-entity so this is not a false error.
+        entity_fqn = (created_lineage or {}).get("entity", {}).get(
+            "fullyQualifiedName"
+        ) or model_str(add_lineage.edge.fromEntity.id)
+        return Either(right=entity_fqn)
 
     @_run_dispatch.register
     def write_override_lineage(
