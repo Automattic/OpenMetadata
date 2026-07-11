@@ -652,7 +652,7 @@ snowflake-connector-python==3.13.2
 snowflake-snowpark-python==1.26.0
 snowflake-sqlalchemy==1.7.3
 sortedcontainers==2.4.0
-soupsieve==2.6
+soupsieve==2.8.4
 sphinx-airflow-theme==0.2.1
 sphinx-argparse==0.5.2
 sphinx-autoapi==3.4.0
