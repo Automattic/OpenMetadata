@@ -424,7 +424,7 @@ jedi==0.19.2
 jeepney==0.8.0
 jiter==0.8.2
 jmespath==0.10.0
-joserfc==1.0.2
+joserfc==1.6.8
 jpype1==1.5.2
 json-merge-patch==0.2
 jsondiff==2.2.1
