@@ -387,7 +387,7 @@ grpcio-status==1.62.3
 grpcio==1.65.5
 gssapi==1.10.1
 h11==0.16.0
-h2==4.3.0
+h2==4.4.1
 hdfs==2.7.3
 hf-xet==1.2.0
 hmsclient==0.1.1
