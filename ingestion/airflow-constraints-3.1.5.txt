@@ -638,7 +638,7 @@ spython==0.3.14
 sqlalchemy-bigquery==1.16.0
 sqlalchemy-spanner==1.17.1
 sqlalchemy_drill==1.1.9
-sqlparse==0.5.4
+sqlparse==0.6.0
 sshtunnel==0.4.0
 stack-data==0.6.3
 starlette==0.48.0

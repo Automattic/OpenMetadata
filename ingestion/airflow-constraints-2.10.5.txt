@@ -675,7 +675,7 @@ sqlalchemy-bigquery==1.12.1
 sqlalchemy-redshift==0.8.14
 sqlalchemy-spanner==1.8.0
 sqlalchemy_drill==1.1.5
-sqlparse==0.5.3
+sqlparse==0.6.0
 sshtunnel==0.4.0
 stack-data==0.6.3
 starkbank-ecdsa==2.2.0
