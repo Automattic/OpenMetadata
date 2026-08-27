@@ -199,7 +199,7 @@ astroid==3.3.8
 asttokens==3.0.0
 async-timeout==5.0.1
 asyncpg==0.30.0
-asyncssh==2.19.0
+asyncssh==2.23.1
 atlasclient==1.0.0
 atlassian-python-api==3.41.19
 attrs==25.1.0
