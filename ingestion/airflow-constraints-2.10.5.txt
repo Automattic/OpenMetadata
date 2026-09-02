@@ -696,7 +696,7 @@ time-machine==2.16.0
 tomli==2.2.1
 tomli_w==1.2.0
 tomlkit==0.13.2
-tornado==6.4.2
+tornado==6.5.8
 towncrier==24.8.0
 tqdm==4.67.1
 traitlets==5.14.3
