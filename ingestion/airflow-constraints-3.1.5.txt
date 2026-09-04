@@ -138,7 +138,7 @@ apache-airflow-providers-facebook==3.9.0
 apache-airflow-providers-ftp==3.14.0
 apache-airflow-providers-git==0.1.0
 apache-airflow-providers-github==2.10.0
-apache-airflow-providers-google==19.1.0
+apache-airflow-providers-google==22.2.1
 apache-airflow-providers-grpc==3.9.0
 apache-airflow-providers-hashicorp==4.4.0
 apache-airflow-providers-http==5.6.0
