@@ -93,7 +93,7 @@ aliyun-python-sdk-kms==2.16.5
 amqp==5.3.1
 annotated-types==0.7.0
 ansicolors==1.1.8
-anyio==4.12.1
+anyio==4.14.2
 apache-airflow-providers-airbyte==5.3.2
 apache-airflow-providers-alibaba==3.3.4
 apache-airflow-providers-amazon==9.21.0
