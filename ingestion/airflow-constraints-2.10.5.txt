@@ -185,7 +185,7 @@ apache-airflow-providers-teradata==3.0.0
 apache-airflow-providers-trino==6.0.0
 apache-airflow-providers-vertica==4.0.0
 apache-airflow-providers-weaviate==3.0.0
-apache-airflow-providers-yandex==4.0.0
+apache-airflow-providers-yandex==4.5.1
 apache-airflow-providers-ydb==2.1.0
 apache-airflow-providers-zendesk==4.9.0
 apache-beam==2.62.0
