@@ -190,7 +190,7 @@ apache-airflow-providers-ydb==2.1.0
 apache-airflow-providers-zendesk==4.9.0
 apache-beam==2.62.0
 apispec==6.8.1
-apprise==1.9.2
+apprise==1.11.0
 argcomplete==3.5.3
 asana==3.2.3
 asgiref==3.8.1
