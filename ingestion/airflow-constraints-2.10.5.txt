@@ -523,7 +523,7 @@ pandas-gbq==0.26.1
 pandas-stubs==2.2.3.241126
 pandas==2.1.4
 papermill==2.6.0
-paramiko==3.5.0
+paramiko==5.0.0
 parso==0.8.4
 pathable==0.4.4
 pathspec==0.12.1
