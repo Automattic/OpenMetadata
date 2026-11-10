@@ -452,7 +452,9 @@ class MetadataRestSink(Sink):  # pylint: disable=too-many-public-methods
 
         return self._record_query_flush_result(result)
 
-    def _record_query_flush_result(self, result: Optional[BulkOperationResult]) -> Either[Entity]:  # noqa: UP045
+    def _record_query_flush_result(
+        self, result: Optional[BulkOperationResult]
+    ) -> Either[Entity]:  # noqa: UP045
         """Record a query bulk response. Already-present queries are reported as warnings
         (not failures) so a lineage run is not marked failed over queries that lost no
         metadata. Any other failure is still recorded as a failure."""
@@ -467,7 +469,10 @@ class MetadataRestSink(Sink):  # pylint: disable=too-many-public-methods
         for failed in result.failedRequest or []:
             query_ref = failed.request or "unknown"
             if is_duplicate_query_conflict(failed.message):
-                self.status.warning("Query", f"Skipped already-present query [{query_ref}]: {failed.message}")
+                self.status.warning(
+                    "Query",
+                    f"Skipped already-present query [{query_ref}]: {failed.message}",
+                )
             else:
                 failure = StackTraceError(
                     name="Query Buffer",
@@ -477,7 +482,9 @@ class MetadataRestSink(Sink):  # pylint: disable=too-many-public-methods
                 self.status.failed(failure)
                 first_failure = first_failure or failure
 
-        return Either(left=first_failure) if first_failure else Either(right=result)  # pyright: ignore[reportCallIssue]
+        return (
+            Either(left=first_failure) if first_failure else Either(right=result)
+        )  # pyright: ignore[reportCallIssue]
 
     @_run_dispatch.register
     def patch_entity(self, record: PatchRequest) -> Either[Entity]:
@@ -556,16 +563,19 @@ class MetadataRestSink(Sink):  # pylint: disable=too-many-public-methods
         # return_lineage=False: we only need a status identifier below, so skip the expensive
         # per-edge full-graph GET that otherwise dominates lineage-heavy ingestions.
         created_lineage = self.metadata.add_lineage(add_lineage, check_patch=True, return_lineage=False)
-        if created_lineage.get("error"):
+        if created_lineage and created_lineage.get("error"):
             return Either(left=StackTraceError(name="AddLineageRequestError", error=created_lineage["error"]))
 
-        # Producers that build id-only references carry no FQN. Fall back to a "{type}:{uuid}"
-        # label (e.g. "table:d311bdf2-..."):
+        # The edge was written, but reading back the origin node can fail (None response,
+        # e.g. 404 when its graph holds an edge to a deleted entity), and producers that
+        # build id-only references carry no FQN. Fall back to a "{type}:{uuid}" label
+        # (e.g. "table:d311bdf2-..."):
         # a None right would silently drop the edge from scanned status (ReturnStep.run) and
         # stop write_override_lineage from patching the lineage-processed flag.
         from_reference = add_lineage.edge.fromEntity
         source_label = (
-            created_lineage["entity"]["fullyQualifiedName"] or f"{from_reference.type}:{model_str(from_reference.id)}"
+            (created_lineage or {}).get("entity", {}).get("fullyQualifiedName")
+            or f"{from_reference.type}:{model_str(from_reference.id)}"
         )
         return Either(right=source_label)  # pyright: ignore[reportCallIssue]
 

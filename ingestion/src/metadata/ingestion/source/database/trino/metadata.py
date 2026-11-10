@@ -229,6 +229,15 @@ def _get_columns(self, connection: Connection, table_name: str, schema: str = No
     return columns
 
 
+def _table_names_predicate(table_names: Iterable[str]) -> str:
+    """
+    `and "table_name" IN (...)` clause for TRINO_TABLE_COMMENTS. Names come from Trino's own
+    listing, but they are still embedded as SQL literals, so single quotes are doubled.
+    """
+    literals = ", ".join("'" + name.replace("'", "''") + "'" for name in sorted(table_names))
+    return f'    and "table_name" IN ({literals})\n'
+
+
 def get_table_comment(  # pylint: disable=unused-argument
     self,
     connection: Connection,
@@ -258,10 +267,15 @@ def get_table_comment(  # pylint: disable=unused-argument
             or schema not in self.processed_schema
         ):
             self.processed_schema.add(schema)
-            self.get_all_table_comments(
-                connection,
-                TRINO_TABLE_COMMENTS.format(catalog_name=catalog_name, schema_name=schema),
-            )
+            query = TRINO_TABLE_COMMENTS.format(catalog_name=catalog_name, schema_name=schema)
+            # Restrict the schema-wide scan to the tables the source kept after applying
+            # tableFilterPattern (recorded by TrinoSource.get_tables_name_and_type). Without
+            # this, a run scoped to a few tables of a large schema still reads every row of
+            # system.metadata.table_comments and can hit the query timeout.
+            table_names = getattr(self, "comment_table_names", {}).get(schema)
+            if table_names:
+                query += _table_names_predicate(table_names)
+            self.get_all_table_comments(connection, query)
         return {"text": self.all_table_comments.get((table_name, schema)) or None}
     except error.TrinoQueryError as exe:
         if exe.error_name in (error.PERMISSION_DENIED,):
@@ -377,6 +391,21 @@ class TrinoSource(CommonDbSourceService):
         return [
             TableNameAndType(name=name, type_=table_type) for name in self.inspector.get_table_names(schema_name) or []
         ]
+
+    def get_tables_name_and_type(self) -> Optional[Iterable[Tuple[str, TableType]]]:  # noqa: UP006, UP045
+        """
+        Materialise the filtered table list of the schema before the first table is
+        processed and hand it to the dialect, so `get_table_comment` only fetches the
+        comments of the tables that survived `tableFilterPattern` instead of scanning
+        `system.metadata.table_comments` for the whole schema.
+        """
+        schema_name = self.context.get().database_schema
+        tables = list(super().get_tables_name_and_type() or [])
+        dialect = self.engine.dialect
+        if not hasattr(dialect, "comment_table_names"):
+            dialect.comment_table_names = {}
+        dialect.comment_table_names[schema_name] = {name for name, _ in tables}
+        yield from tables
 
     def get_database_names(self) -> Iterable[str]:
         configured_catalog = self.service_connection.catalog
