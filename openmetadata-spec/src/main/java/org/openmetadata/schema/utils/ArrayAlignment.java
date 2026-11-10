@@ -3,6 +3,7 @@ package org.openmetadata.schema.utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -147,6 +148,8 @@ final class ArrayAlignment {
     for (int position = last; position >= 0; position = previous[position]) {
       run.add(shared.get(position));
     }
-    return run.reversed();
+    // List.reversed() is Java 21 (SequencedCollection); this branch targets Java 17.
+    Collections.reverse(run);
+    return run;
   }
 }
