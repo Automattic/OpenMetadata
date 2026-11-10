@@ -46,7 +46,8 @@ def test_write_lineage_handles_none_response():
     result = sink.write_lineage(LINEAGE_REQUEST)
 
     assert result.left is None
-    assert result.right == FROM_ID
+    # No FQN to report, so the sink falls back to the "{type}:{uuid}" label.
+    assert result.right == f"dashboardDataModel:{FROM_ID}"
 
 
 def test_write_lineage_error_response_is_reported():

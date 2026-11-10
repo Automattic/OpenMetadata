@@ -12,15 +12,19 @@
 """Test Trino Metadata"""
 
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from trino.sqlalchemy.dialect import TrinoDialect
 
 from metadata.generated.schema.entity.data.table import TableType
-from metadata.ingestion.source.database.common_db_source import TableNameAndType
+from metadata.ingestion.source.database.common_db_source import (
+    CommonDbSourceService,
+    TableNameAndType,
+)
 from metadata.ingestion.source.database.trino.metadata import (
     TrinoSource,
     _get_columns,
+    get_table_comment,
     get_view_definition,
 )
 
@@ -279,6 +283,59 @@ class TestTrinoColumnComments:
     def test_null_comment_is_none(self):
         columns = self._columns_for([self._record("age", None)])
         assert columns[0]["comment"] is None
+
+
+class TestTrinoTableCommentsFilter:
+    """The schema-wide table_comments scan is restricted to the tables the source kept"""
+
+    @staticmethod
+    def _dialect(comment_table_names):
+        dialect = Mock()
+        dialect._get_default_catalog_name.return_value = "test_catalog"
+        dialect._get_default_schema_name.return_value = None
+        dialect.processed_schema = set()
+        dialect.comment_table_names = comment_table_names
+        dialect.queries = []
+
+        def record_query(connection, query):
+            dialect.queries.append(query)
+            dialect.all_table_comments = {("orders", "test_schema"): "Orders"}
+            dialect.current_db = connection.engine.url.database
+
+        dialect.get_all_table_comments.side_effect = record_query
+        return dialect
+
+    def test_query_restricted_to_recorded_tables(self):
+        dialect = self._dialect({"test_schema": {"orders", "o'neil"}})
+
+        comment = get_table_comment(dialect, Mock(), "orders", "test_schema")
+
+        assert comment == {"text": "Orders"}
+        assert len(dialect.queries) == 1
+        assert '"schema_name" = \'test_schema\'' in dialect.queries[0]
+        assert "and \"table_name\" IN ('o''neil', 'orders')" in dialect.queries[0]
+
+    def test_query_unrestricted_without_recorded_tables(self):
+        dialect = self._dialect({})
+
+        get_table_comment(dialect, Mock(), "orders", "test_schema")
+
+        assert len(dialect.queries) == 1
+        assert '"table_name" IN' not in dialect.queries[0]
+
+    def test_get_tables_name_and_type_records_filtered_tables(self):
+        source = TrinoSource.__new__(TrinoSource)
+        source.context = Mock()
+        source.context.get.return_value.database_schema = "test_schema"
+        source.engine = Mock()
+        source.engine.dialect = Mock(spec=[])
+        kept = [("orders", TableType.Iceberg), ("customers_v", TableType.View)]
+
+        with patch.object(CommonDbSourceService, "get_tables_name_and_type", return_value=iter(kept)):
+            tables = list(source.get_tables_name_and_type())
+
+        assert tables == kept
+        assert source.engine.dialect.comment_table_names == {"test_schema": {"orders", "customers_v"}}
 
 
 if __name__ == "__main__":
